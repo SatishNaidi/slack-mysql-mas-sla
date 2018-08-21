@@ -1,0 +1,45 @@
+---
+- hosts: mysql
+  remote_user: ec2-user
+  become: true
+  tasks:
+    - name: Install Docker
+      yum:
+        name: docker
+        state: latest
+        update_cache: yes
+    - name: Install GIT
+      yum:
+        name: git
+        state: latest
+    - name: Run Docker
+      service:
+        name: docker
+        state: started
+    
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/1.20.0/docker-compose-Linux-x86_64"
+        dest: "/usr/local/bin/docker-compose"
+        force: true
+        owner: "root"
+        group: "root"
+        mode: "0755"
+
+    - name: Clone the git repository
+      git:
+        repo: 'https://github.com/SatishNaidi/mysql-master-slave.git'
+        dest: /opt/mysql-replication
+    
+    - name: Run Docker Compose
+      shell: "/usr/local/bin/docker-compose up -d"
+      args:
+        chdir: /opt/mysql-replication
+    
+    - name: Setup MySql Master Slave Replication
+      script: "./create_cluster.sh"
+      args:
+        executable: /bin/bash
+        chdir: /opt/mysql-replication
+       
+
