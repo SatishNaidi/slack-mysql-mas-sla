@@ -1,0 +1,85 @@
+---
+- name: Create a new Demo EC2 instance
+  hosts: localhost
+  gather_facts: False
+
+  vars:
+      region: us-east-1
+      instance_type: t2.micro
+      ami: ami-0ff8a91507f77f867 # Ubuntu 16.04 LTS
+      keypair: Mumbai # pem file name
+      master_tag: Master
+      slave_tag: Slave
+      number_machines: 1
+  
+  tasks:
+    - name: Create an ec2 instance
+      ec2:
+         key_name: "{{ keypair }}"
+         group: default  # security group name
+         instance_type: "{{ instance_type}}"
+         image: "{{ ami }}"
+         wait: true
+         region: "{{ region }}"
+         exact_count: "{{ number_machines }}"
+         #count: 1  # default
+         count_tag:
+            Name: "{{ item }}"
+         instance_tags:
+            Name: "{{ item }}"
+         vpc_subnet_id: subnet-0f4c7c58d2bd31d55
+      register: ec2_+"{{ item }}"
+      with_items:
+        - "{{ master_tag }}"
+        - "{{ slave_tag }}"
+    
+
+    - name: Gather Master EC2 Details
+      ec2_instance_facts:
+        ec2_region: "{{ region }}"
+        filters:
+          instance-state-name: running
+          "tag:Name": "{{ master_tag }}"
+      register: master_details
+
+    - debug:
+        var: master_details    
+
+    - name: Gather Slave EC2 Details
+      ec2_instance_facts:
+        ec2_region: "{{ region }}"
+        filters:
+          instance-state-name: running
+          "tag:Name": "{{ slave_tag }}"
+      register: slave_details
+
+    - debug:
+        var: slave_details    
+    
+    - name: Add new instance to Master host group
+      add_host:
+        hostname: "{{ item.public_dns_name }}"
+        groupname: Master
+      with_items: "{{ master_details.instances }}"
+
+    - name: Add new instance to Slave host group
+      add_host:
+        hostname: "{{ item.public_dns_name }}"
+        groupname: Slave
+      with_items: "{{ slave_details.instances }}"
+
+
+- name: Configure instance(s)
+  hosts: Master
+  gather_facts: True
+  become: true
+  tasks:
+    - name: install  git
+      yum: name=git state=present
+- name: Configure instance(s)
+  hosts: Slave
+  gather_facts: True
+  become: true
+  tasks:
+    - name: install  git
+      yum: name=git state=present
